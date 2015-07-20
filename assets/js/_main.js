@@ -35,6 +35,32 @@ var HomeAway = {
     init: function() {
       // JavaScript to be fired on all pages
       //alert(1);
+
+      //<img class="img" src="http://placekitten.com/320/480" alt="" data-big="http://placekitten.com/1024/768" />
+      $(".img").each(function() {
+        if (Modernizr.mq('only screen and (min-width: 1200px)')) {
+          $(this).attr("src", $(this).attr("data-big"));
+        }
+      });
+
+      if (Modernizr.touch){
+         // bind to touchstart, touchmove, etc and watch `event.streamId`
+      } else {
+         // bind to normal click, mousemove, etc
+      }
+
+      //<img src="tomato.svg">
+      if (!Modernizr.svg) {
+        var imgs = document.getElementsByTagName('img');
+        var svgExtension = /.*\.svg$/
+        var l = imgs.length;
+        for(var i = 0; i < l; i++) {
+          if(imgs[i].src.match(svgExtension)) {
+            imgs[i].src = imgs[i].src.slice(0, -3) + 'png';
+            console.log(imgs[i].src);
+          }
+        }
+      }
     }
   },
   // Home page
