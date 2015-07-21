@@ -14046,7 +14046,866 @@ window.Modernizr = (function( window, document, undefined ) {
     return Modernizr;
 
 })(this, this.document);
-;// Avoid `console` errors in browsers that lack a console.
+;(function() {
+  var MutationObserver, Util, WeakMap, getComputedStyle, getComputedStyleRX,
+    bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
+    indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
+
+  Util = (function() {
+    function Util() {}
+
+    Util.prototype.extend = function(custom, defaults) {
+      var key, value;
+      for (key in defaults) {
+        value = defaults[key];
+        if (custom[key] == null) {
+          custom[key] = value;
+        }
+      }
+      return custom;
+    };
+
+    Util.prototype.isMobile = function(agent) {
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(agent);
+    };
+
+    Util.prototype.createEvent = function(event, bubble, cancel, detail) {
+      var customEvent;
+      if (bubble == null) {
+        bubble = false;
+      }
+      if (cancel == null) {
+        cancel = false;
+      }
+      if (detail == null) {
+        detail = null;
+      }
+      if (document.createEvent != null) {
+        customEvent = document.createEvent('CustomEvent');
+        customEvent.initCustomEvent(event, bubble, cancel, detail);
+      } else if (document.createEventObject != null) {
+        customEvent = document.createEventObject();
+        customEvent.eventType = event;
+      } else {
+        customEvent.eventName = event;
+      }
+      return customEvent;
+    };
+
+    Util.prototype.emitEvent = function(elem, event) {
+      if (elem.dispatchEvent != null) {
+        return elem.dispatchEvent(event);
+      } else if (event in (elem != null)) {
+        return elem[event]();
+      } else if (("on" + event) in (elem != null)) {
+        return elem["on" + event]();
+      }
+    };
+
+    Util.prototype.addEvent = function(elem, event, fn) {
+      if (elem.addEventListener != null) {
+        return elem.addEventListener(event, fn, false);
+      } else if (elem.attachEvent != null) {
+        return elem.attachEvent("on" + event, fn);
+      } else {
+        return elem[event] = fn;
+      }
+    };
+
+    Util.prototype.removeEvent = function(elem, event, fn) {
+      if (elem.removeEventListener != null) {
+        return elem.removeEventListener(event, fn, false);
+      } else if (elem.detachEvent != null) {
+        return elem.detachEvent("on" + event, fn);
+      } else {
+        return delete elem[event];
+      }
+    };
+
+    Util.prototype.innerHeight = function() {
+      if ('innerHeight' in window) {
+        return window.innerHeight;
+      } else {
+        return document.documentElement.clientHeight;
+      }
+    };
+
+    return Util;
+
+  })();
+
+  WeakMap = this.WeakMap || this.MozWeakMap || (WeakMap = (function() {
+    function WeakMap() {
+      this.keys = [];
+      this.values = [];
+    }
+
+    WeakMap.prototype.get = function(key) {
+      var i, item, j, len, ref;
+      ref = this.keys;
+      for (i = j = 0, len = ref.length; j < len; i = ++j) {
+        item = ref[i];
+        if (item === key) {
+          return this.values[i];
+        }
+      }
+    };
+
+    WeakMap.prototype.set = function(key, value) {
+      var i, item, j, len, ref;
+      ref = this.keys;
+      for (i = j = 0, len = ref.length; j < len; i = ++j) {
+        item = ref[i];
+        if (item === key) {
+          this.values[i] = value;
+          return;
+        }
+      }
+      this.keys.push(key);
+      return this.values.push(value);
+    };
+
+    return WeakMap;
+
+  })());
+
+  MutationObserver = this.MutationObserver || this.WebkitMutationObserver || this.MozMutationObserver || (MutationObserver = (function() {
+    function MutationObserver() {
+      if (typeof console !== "undefined" && console !== null) {
+        console.warn('MutationObserver is not supported by your browser.');
+      }
+      if (typeof console !== "undefined" && console !== null) {
+        console.warn('WOW.js cannot detect dom mutations, please call .sync() after loading new content.');
+      }
+    }
+
+    MutationObserver.notSupported = true;
+
+    MutationObserver.prototype.observe = function() {};
+
+    return MutationObserver;
+
+  })());
+
+  getComputedStyle = this.getComputedStyle || function(el, pseudo) {
+    this.getPropertyValue = function(prop) {
+      var ref;
+      if (prop === 'float') {
+        prop = 'styleFloat';
+      }
+      if (getComputedStyleRX.test(prop)) {
+        prop.replace(getComputedStyleRX, function(_, _char) {
+          return _char.toUpperCase();
+        });
+      }
+      return ((ref = el.currentStyle) != null ? ref[prop] : void 0) || null;
+    };
+    return this;
+  };
+
+  getComputedStyleRX = /(\-([a-z]){1})/g;
+
+  this.WOW = (function() {
+    WOW.prototype.defaults = {
+      boxClass: 'wow',
+      animateClass: 'animated',
+      offset: 0,
+      mobile: true,
+      live: true,
+      callback: null
+    };
+
+    function WOW(options) {
+      if (options == null) {
+        options = {};
+      }
+      this.scrollCallback = bind(this.scrollCallback, this);
+      this.scrollHandler = bind(this.scrollHandler, this);
+      this.resetAnimation = bind(this.resetAnimation, this);
+      this.start = bind(this.start, this);
+      this.scrolled = true;
+      this.config = this.util().extend(options, this.defaults);
+      this.animationNameCache = new WeakMap();
+      this.wowEvent = this.util().createEvent(this.config.boxClass);
+    }
+
+    WOW.prototype.init = function() {
+      var ref;
+      this.element = window.document.documentElement;
+      if ((ref = document.readyState) === "interactive" || ref === "complete") {
+        this.start();
+      } else {
+        this.util().addEvent(document, 'DOMContentLoaded', this.start);
+      }
+      return this.finished = [];
+    };
+
+    WOW.prototype.start = function() {
+      var box, j, len, ref;
+      this.stopped = false;
+      this.boxes = (function() {
+        var j, len, ref, results;
+        ref = this.element.querySelectorAll("." + this.config.boxClass);
+        results = [];
+        for (j = 0, len = ref.length; j < len; j++) {
+          box = ref[j];
+          results.push(box);
+        }
+        return results;
+      }).call(this);
+      this.all = (function() {
+        var j, len, ref, results;
+        ref = this.boxes;
+        results = [];
+        for (j = 0, len = ref.length; j < len; j++) {
+          box = ref[j];
+          results.push(box);
+        }
+        return results;
+      }).call(this);
+      if (this.boxes.length) {
+        if (this.disabled()) {
+          this.resetStyle();
+        } else {
+          ref = this.boxes;
+          for (j = 0, len = ref.length; j < len; j++) {
+            box = ref[j];
+            this.applyStyle(box, true);
+          }
+        }
+      }
+      if (!this.disabled()) {
+        this.util().addEvent(window, 'scroll', this.scrollHandler);
+        this.util().addEvent(window, 'resize', this.scrollHandler);
+        this.interval = setInterval(this.scrollCallback, 50);
+      }
+      if (this.config.live) {
+        return new MutationObserver((function(_this) {
+          return function(records) {
+            var k, len1, node, record, results;
+            results = [];
+            for (k = 0, len1 = records.length; k < len1; k++) {
+              record = records[k];
+              results.push((function() {
+                var l, len2, ref1, results1;
+                ref1 = record.addedNodes || [];
+                results1 = [];
+                for (l = 0, len2 = ref1.length; l < len2; l++) {
+                  node = ref1[l];
+                  results1.push(this.doSync(node));
+                }
+                return results1;
+              }).call(_this));
+            }
+            return results;
+          };
+        })(this)).observe(document.body, {
+          childList: true,
+          subtree: true
+        });
+      }
+    };
+
+    WOW.prototype.stop = function() {
+      this.stopped = true;
+      this.util().removeEvent(window, 'scroll', this.scrollHandler);
+      this.util().removeEvent(window, 'resize', this.scrollHandler);
+      if (this.interval != null) {
+        return clearInterval(this.interval);
+      }
+    };
+
+    WOW.prototype.sync = function(element) {
+      if (MutationObserver.notSupported) {
+        return this.doSync(this.element);
+      }
+    };
+
+    WOW.prototype.doSync = function(element) {
+      var box, j, len, ref, results;
+      if (element == null) {
+        element = this.element;
+      }
+      if (element.nodeType !== 1) {
+        return;
+      }
+      element = element.parentNode || element;
+      ref = element.querySelectorAll("." + this.config.boxClass);
+      results = [];
+      for (j = 0, len = ref.length; j < len; j++) {
+        box = ref[j];
+        if (indexOf.call(this.all, box) < 0) {
+          this.boxes.push(box);
+          this.all.push(box);
+          if (this.stopped || this.disabled()) {
+            this.resetStyle();
+          } else {
+            this.applyStyle(box, true);
+          }
+          results.push(this.scrolled = true);
+        } else {
+          results.push(void 0);
+        }
+      }
+      return results;
+    };
+
+    WOW.prototype.show = function(box) {
+      this.applyStyle(box);
+      box.className = box.className + " " + this.config.animateClass;
+      if (this.config.callback != null) {
+        this.config.callback(box);
+      }
+      this.util().emitEvent(box, this.wowEvent);
+      this.util().addEvent(box, 'animationend', this.resetAnimation);
+      this.util().addEvent(box, 'oanimationend', this.resetAnimation);
+      this.util().addEvent(box, 'webkitAnimationEnd', this.resetAnimation);
+      this.util().addEvent(box, 'MSAnimationEnd', this.resetAnimation);
+      return box;
+    };
+
+    WOW.prototype.applyStyle = function(box, hidden) {
+      var delay, duration, iteration;
+      duration = box.getAttribute('data-wow-duration');
+      delay = box.getAttribute('data-wow-delay');
+      iteration = box.getAttribute('data-wow-iteration');
+      return this.animate((function(_this) {
+        return function() {
+          return _this.customStyle(box, hidden, duration, delay, iteration);
+        };
+      })(this));
+    };
+
+    WOW.prototype.animate = (function() {
+      if ('requestAnimationFrame' in window) {
+        return function(callback) {
+          return window.requestAnimationFrame(callback);
+        };
+      } else {
+        return function(callback) {
+          return callback();
+        };
+      }
+    })();
+
+    WOW.prototype.resetStyle = function() {
+      var box, j, len, ref, results;
+      ref = this.boxes;
+      results = [];
+      for (j = 0, len = ref.length; j < len; j++) {
+        box = ref[j];
+        results.push(box.style.visibility = 'visible');
+      }
+      return results;
+    };
+
+    WOW.prototype.resetAnimation = function(event) {
+      var target;
+      if (event.type.toLowerCase().indexOf('animationend') >= 0) {
+        target = event.target || event.srcElement;
+        return target.className = target.className.replace(this.config.animateClass, '').trim();
+      }
+    };
+
+    WOW.prototype.customStyle = function(box, hidden, duration, delay, iteration) {
+      if (hidden) {
+        this.cacheAnimationName(box);
+      }
+      box.style.visibility = hidden ? 'hidden' : 'visible';
+      if (duration) {
+        this.vendorSet(box.style, {
+          animationDuration: duration
+        });
+      }
+      if (delay) {
+        this.vendorSet(box.style, {
+          animationDelay: delay
+        });
+      }
+      if (iteration) {
+        this.vendorSet(box.style, {
+          animationIterationCount: iteration
+        });
+      }
+      this.vendorSet(box.style, {
+        animationName: hidden ? 'none' : this.cachedAnimationName(box)
+      });
+      return box;
+    };
+
+    WOW.prototype.vendors = ["moz", "webkit"];
+
+    WOW.prototype.vendorSet = function(elem, properties) {
+      var name, results, value, vendor;
+      results = [];
+      for (name in properties) {
+        value = properties[name];
+        elem["" + name] = value;
+        results.push((function() {
+          var j, len, ref, results1;
+          ref = this.vendors;
+          results1 = [];
+          for (j = 0, len = ref.length; j < len; j++) {
+            vendor = ref[j];
+            results1.push(elem["" + vendor + (name.charAt(0).toUpperCase()) + (name.substr(1))] = value);
+          }
+          return results1;
+        }).call(this));
+      }
+      return results;
+    };
+
+    WOW.prototype.vendorCSS = function(elem, property) {
+      var j, len, ref, result, style, vendor;
+      style = getComputedStyle(elem);
+      result = style.getPropertyCSSValue(property);
+      ref = this.vendors;
+      for (j = 0, len = ref.length; j < len; j++) {
+        vendor = ref[j];
+        result = result || style.getPropertyCSSValue("-" + vendor + "-" + property);
+      }
+      return result;
+    };
+
+    WOW.prototype.animationName = function(box) {
+      var animationName;
+      try {
+        animationName = this.vendorCSS(box, 'animation-name').cssText;
+      } catch (_error) {
+        animationName = getComputedStyle(box).getPropertyValue('animation-name');
+      }
+      if (animationName === 'none') {
+        return '';
+      } else {
+        return animationName;
+      }
+    };
+
+    WOW.prototype.cacheAnimationName = function(box) {
+      return this.animationNameCache.set(box, this.animationName(box));
+    };
+
+    WOW.prototype.cachedAnimationName = function(box) {
+      return this.animationNameCache.get(box);
+    };
+
+    WOW.prototype.scrollHandler = function() {
+      return this.scrolled = true;
+    };
+
+    WOW.prototype.scrollCallback = function() {
+      var box;
+      if (this.scrolled) {
+        this.scrolled = false;
+        this.boxes = (function() {
+          var j, len, ref, results;
+          ref = this.boxes;
+          results = [];
+          for (j = 0, len = ref.length; j < len; j++) {
+            box = ref[j];
+            if (!(box)) {
+              continue;
+            }
+            if (this.isVisible(box)) {
+              this.show(box);
+              continue;
+            }
+            results.push(box);
+          }
+          return results;
+        }).call(this);
+        if (!(this.boxes.length || this.config.live)) {
+          return this.stop();
+        }
+      }
+    };
+
+    WOW.prototype.offsetTop = function(element) {
+      var top;
+      while (element.offsetTop === void 0) {
+        element = element.parentNode;
+      }
+      top = element.offsetTop;
+      while (element = element.offsetParent) {
+        top += element.offsetTop;
+      }
+      return top;
+    };
+
+    WOW.prototype.isVisible = function(box) {
+      var bottom, offset, top, viewBottom, viewTop;
+      offset = box.getAttribute('data-wow-offset') || this.config.offset;
+      viewTop = window.pageYOffset;
+      viewBottom = viewTop + Math.min(this.element.clientHeight, this.util().innerHeight()) - offset;
+      top = this.offsetTop(box);
+      bottom = top + box.clientHeight;
+      return top <= viewBottom && bottom >= viewTop;
+    };
+
+    WOW.prototype.util = function() {
+      return this._util != null ? this._util : this._util = new Util();
+    };
+
+    WOW.prototype.disabled = function() {
+      return !this.config.mobile && this.util().isMobile(navigator.userAgent);
+    };
+
+    return WOW;
+
+  })();
+
+}).call(this);
+;/*
+ * Lazy Line Painter
+ * SVG Stroke animation.
+ *
+ * https://github.com/camoconnell/lazy-line-painter
+ * http://www.camoconnell.com
+ *
+ * Licensed under the MIT license.
+ *
+ */
+
+(function($, window, undefined) {
+
+    "use strict";
+
+    var dataKey = 'lazyLinePainter';
+    var methods = {
+
+        /*
+            PUBLIC : SETUP LAZY LINE DATA
+        */
+        init: function(_options) {
+
+            return this.each(function() {
+
+                var $this = $(this);
+                var data = $this.data(dataKey);
+                $this.addClass('lazy-line');
+
+                // If the plugin hasn't been initialized yet
+                if (!data) {
+
+                    // Collect settings, define defaults
+                    var options = $.extend({
+                        'width': null,
+                        'height': null,
+                        'strokeWidth': 2,
+                        'strokeColor': '#000',
+                        'strokeOverColor': null,
+                        'strokeCap': 'round',
+                        'strokeJoin': 'round',
+                        'strokeOpacity': 1,
+                        'arrowEnd': 'none',
+                        'onComplete': null,
+                        'onStart': null,
+                        'delay': null,
+                        'overrideKey': null,
+                        'drawSequential': true,
+                        'speedMultiplier': 1,
+                        'reverse': false,
+                        'responsive': false
+                    }, _options);
+
+                    // Set up path information
+                    // if overrideKey has been defined - use overrideKey as key within the svgData object.
+                    // else - use the elements id as key within the svgData object.
+                    var target = options.overrideKey ? options.overrideKey : $this.attr('id').replace('#', '');
+                    var w = options.svgData[target].dimensions.width;
+                    var h = options.svgData[target].dimensions.height;
+
+                    // target stroke path
+                    options.svgData = options.svgData[target].strokepath;
+
+                    // Create svg element and set dimensions
+                    if (options.width === null) {
+                        options.width = w;
+                    }
+                    if (options.height === null) {
+                        options.height = h;
+                    }
+                    if (!options.responsive) {
+                        $this.css({
+                            'width': options.width,
+                            'height': options.height
+                        });
+                    }
+
+                    // create svg
+                    var svg = getSVGElement({
+                        viewBox: '0 0 ' + w + ' ' + h,
+                        preserveAspectRatio: 'xMidYMid'
+                    });
+                    options.svg = $(svg);
+                    $this.append(options.svg);
+
+                    // cache options
+                    $this.data(dataKey, options);
+                }
+            });
+        },
+
+        /*
+            PUBLIC : PAINT LAZY LINE DATA
+        */
+        paint: function() {
+
+            return this.each(function() {
+
+                // retrieve data object
+                var $this = $(this);
+                var data = $this.data(dataKey);
+
+                var init = function() {
+
+                    // Build array of path objects
+                    data.paths = [];
+                    data.longestDuration = 0;
+                    data.playhead = 0;
+
+                    // find totalDuration,
+                    // required before looping paths for setting up reverse options.
+                    var totalDuration = 0;
+                    for (var i = 0; i < data.svgData.length; i++) {
+                        var duration = data.svgData[i].duration * data.speedMultiplier;
+                        totalDuration += duration;
+                    }
+
+                    // loop paths
+                    // obtain path length, animation duration and animation start time.
+                    for (var i = 0; i < data.svgData.length; i++) {
+
+                        var path = getPath(data, i);
+                        var length = path.getTotalLength();
+                        path.style.strokeDasharray = length + ' ' + length;
+                        path.style.strokeDashoffset = length;
+                        path.style.display = 'block';
+                        path.getBoundingClientRect();
+
+                        var duration = data.svgData[i].duration * data.speedMultiplier;
+                        if (duration > data.longestDuration) {
+                            data.longestDuration = duration;
+                        }
+
+                        var drawStartTime;
+                        if (data.reverse) {
+                            totalDuration -= duration;
+                            drawStartTime = totalDuration;
+                        } else {
+                            drawStartTime = data.playhead;
+                        }
+
+                        data.paths.push({
+                            'duration': duration,
+                            'drawStartTime': drawStartTime,
+                            'path': path,
+                            'length': length
+                        });
+                        data.playhead += duration;
+                    }
+
+                    // begin animation
+                    data.totalDuration = (data.drawSequential) ? data.playhead : data.longestDuration;
+                    data.rAF = requestAnimationFrame(function(timestamp) {
+                        draw(timestamp, data);
+                    });
+
+                    // fire onStart callback
+                    if (data.onStart !== null) {
+                        data.onStart();
+                    }
+                };
+
+                // if delay isset
+                if (data.delay === null) {
+                    init();
+                } else {
+                    setTimeout(init, data.delay);
+                }
+            });
+        },
+
+        /*
+            TOGGLE PAUSE/RESUME ANIMATION
+        */
+        pauseResume: function() {
+
+            return this.each(function() {
+
+                var data = $(this).data(dataKey);
+
+                if (!data.paused) {
+                    data.paused = true;
+
+                    // cancel rAF
+                    cancelAnimationFrame(data.rAF);
+                } else {
+                    data.paused = false;
+
+                    // resume rAF
+                    requestAnimationFrame(function(timestamp) {
+                        adjustStartTime(timestamp, data)
+                    });
+                }
+            });
+        },
+        /*
+            ERASE LAZY LINE DATA
+        */
+        erase: function() {
+
+            return this.each(function() {
+
+                // retrieve data object
+                var $this = $(this);
+                var data = $this.data(dataKey);
+
+                // reset / cancel rAF
+                data.startTime = null;
+                data.elapsedTime = null;
+                cancelAnimationFrame(data.rAF);
+
+                // empty contents of svg
+                data.svg.empty();
+            });
+        },
+
+        /*
+            DESTROY LAZY LINE DATA & ELEMENT
+        */
+        destroy: function() {
+
+            return this.each(function() {
+
+                // retrieve / remove data object
+                var $this = $(this);
+                $this.removeData(dataKey);
+
+                // remove container element
+                $this.remove();
+            });
+        }
+    };
+
+    var adjustStartTime = function(timestamp, o) {
+        o.startTime = timestamp - o.elapsedTime;
+        requestAnimationFrame(function(timestamp) {
+            draw(timestamp, o);
+        });
+    }
+
+    var draw = function(timestamp, o) {
+
+        if (o.startTime == null) {
+            o.startTime = timestamp;
+        }
+        o.elapsedTime = timestamp - o.startTime;
+
+        for (var i = 0; i < o.paths.length; i++) {
+
+            var pathElapsedTime;
+            if (o.drawSequential) {
+                pathElapsedTime = o.elapsedTime - o.paths[i].drawStartTime;
+                if (pathElapsedTime < 0) pathElapsedTime = 0;
+            } else {
+                pathElapsedTime = o.elapsedTime;
+            }
+
+            // don't redraw paths that are finished or paths that aren't up yet
+            if (pathElapsedTime < o.paths[i].duration && pathElapsedTime > 0) {
+
+                var frame_length = pathElapsedTime / o.paths[i].duration * o.paths[i].length;
+
+                if (o.reverse || o.svgData[i].reverse) {
+                    o.paths[i].path.style.strokeDashoffset = -o.paths[i].length + frame_length;
+                } else {
+                    o.paths[i].path.style.strokeDashoffset = o.paths[i].length - frame_length;
+                }
+            } else if (pathElapsedTime > o.paths[i].duration) {
+                o.paths[i].path.style.strokeDashoffset = 0;
+            }
+        }
+
+        // whether to continue
+        if (o.elapsedTime < o.totalDuration) {
+            o.rAF = requestAnimationFrame(function(timestamp) {
+                draw(timestamp, o);
+            });
+        } else {
+            if (o.onComplete !== null) {
+                o.onComplete();
+            }
+        }
+    }
+
+    var applyStyles = function(data, value) {
+
+        var styles = {
+            "stroke": (!value.strokeColor) ? data.strokeColor : value.strokeColor,
+            "fill-opacity": 0,
+            "stroke-opacity": (!value.strokeOpacity) ? data.strokeOpacity : value.strokeOpacity,
+            "stroke-width": (!value.strokeWidth) ? data.strokeWidth : value.strokeWidth,
+            "stroke-linecap": (!value.strokeCap) ? data.strokeCap : value.strokeCap,
+            "stroke-linejoin": (!value.strokeJoin) ? data.strokeJoin : value.strokeJoin
+        };
+
+        return styles;
+    };
+
+    /*
+        PRIVATE : SET PATH DATA
+    */
+    var getPath = function(data, i) {
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        var $path = $(path);
+        data.svg.append($path);
+        $path.attr(getAttributes(data, data.svgData[i]));
+        return path;
+    };
+
+    /*
+        PRIVATE : GET STYLE DATA
+    */
+    var getAttributes = function(data, value) {
+        var attributes = {
+            "d": value.path,
+            "stroke": (!value.strokeColor) ? data.strokeColor : value.strokeColor,
+            "fill-opacity": 0,
+            "stroke-opacity": (!value.strokeOpacity) ? data.strokeOpacity : value.strokeOpacity,
+            "stroke-width": (!value.strokeWidth) ? data.strokeWidth : value.strokeWidth,
+            "stroke-linecap": (!value.strokeCap) ? data.strokeCap : value.strokeCap,
+            "stroke-linejoin": (!value.strokeJoin) ? data.strokeJoin : value.strokeJoin,
+            "arrow-end": (!value.arrowEnd) ? data.arrowEnd : value.arrowEnd,
+            "markerWidth": "4",
+            "markerHeight": "3",
+            "orient": "auto"
+        };
+        return attributes;
+    };
+
+    /*
+        PRIVATE : GET STYLE DATA
+    */
+    var getSVGElement = function(attr) {
+        var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttributeNS(null, 'viewBox', attr.viewBox);
+        svg.setAttributeNS(null, 'preserveAspectRatio', attr.preserveAspectRatio);
+        svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        return svg;
+    };
+
+    $.fn.lazylinepainter = function(method) {
+        if (methods[method]) {
+            return methods[method].apply(this, Array.prototype.slice.call(arguments, 1));
+        } else if (typeof method === 'object' || !method) {
+            return methods.init.apply(this, arguments);
+        } else {
+            // error
+        }
+    };
+
+})(jQuery, window);;// Avoid `console` errors in browsers that lack a console.
 (function() {
     var method;
     var noop = function () {};
@@ -14070,7 +14929,116 @@ window.Modernizr = (function( window, document, undefined ) {
 }());
 
 // Place any jQuery/helper plugins in here.
-;//$(function(){
+;        /* 
+         * Lazy Line Painter - Path Object 
+         * Generated using 'SVG to Lazy Line Converter'
+         * 
+         * http://lazylinepainter.info 
+         * Copyright 2013, Cam O'Connell  
+         *  
+         */ 
+        var pathObj = {
+          "icons": {
+            "strokepath": [
+              {
+                "path": "M 58.918 12.52 L 23.524 47.914",
+                "duration": 600
+              },
+              {
+                "path": "M 94.671 48.274 L 59.278 83.667",
+                "duration": 600
+              },
+              {
+                "path": "M 58.504 12.341 L 94.704 48.541",
+                "duration": 600
+              },
+              {
+                "path": "M 22.75 48.095 L 58.95 84.295",
+                "duration": 600
+              },
+              {
+                "path": "M57.5,83.848v264.577V83.848z",
+                "duration": 600
+              },
+              {
+                "path": "M 57 347.841 L 925 347.841",
+                "duration": 600
+              },
+
+              {
+                "path": "M 61.5 213.341 L 61.5 223.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 198.341 L 61.5 208.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 183.341 L 61.5 193.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 168.341 L 61.5 178.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 153.341 L 61.5 163.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 138.341 L 61.5 148.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 123.341 L 61.5 133.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 108.341 L 61.5 118.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 332.341 L 61.5 342.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 317.341 L 61.5 327.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 302.341 L 61.5 312.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 287.341 L 61.5 297.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 272.341 L 61.5 282.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 257.341 L 61.5 267.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 242.341 L 61.5 252.341",
+                "duration": 600
+              },
+              {
+                "path": "M 61.5 227.341 L 61.5 237.341",
+                "duration": 600
+              }
+            ],
+            "dimensions": {
+              "width": 930,
+              "height": 389
+            }
+          }
+        }; 
+
+
+//$(function(){
   //if (Modernizr.touch) { 
     //console.log('Touch Screen');
   //} else { 
@@ -14107,7 +15075,35 @@ var HomeAway = {
     init: function() {
       // JavaScript to be fired on all pages
       //alert(1);
-    }
+
+      //Fallback big pictures
+      //<img class="img" src="http://placekitten.com/320/480" alt="" data-big="http://placekitten.com/1024/768" />
+      $(".img").each(function() {
+        if (Modernizr.mq('only screen and (min-width: 1200px)')) {
+          $(this).attr("src", $(this).attr("data-big"));
+        }
+      });
+
+      if (Modernizr.touch){
+         // bind to touchstart, touchmove, etc and watch `event.streamId`
+      } else {
+         // bind to normal click, mousemove, etc
+      }
+
+      //fallback SVG
+      //<img src="tomato.svg">
+      if (!Modernizr.svg) {
+        var imgs = document.getElementsByTagName('img');
+        var svgExtension = /.*\.svg$/;
+        var l = imgs.length;
+        for(var i = 0; i < l; i++) {
+          if(imgs[i].src.match(svgExtension)) {
+            imgs[i].src = imgs[i].src.slice(0, -3) + 'png';
+            console.log(imgs[i].src);
+          }
+        }
+      } //!Modernizr.svg: function() 
+    } // init: function() 
   },
   // Home page
   home: {
@@ -14118,11 +15114,53 @@ var HomeAway = {
         console.log('Touch Screen');
       } else { 
         console.log('No Touch Screen');
-      }
+      } //Modernizr.touch: function() 
+
       if (Modernizr.svg) { 
         console.log('svg supported');
-      }
-    }
+      } //!Modernizr.svg: function() 
+
+      wow = new WOW(
+        {
+          boxClass:     'anim-box',      // default
+          animateClass: 'bounceIn', // default
+          offset:       0,          // default
+          mobile:       true,       // default
+          live:         true,        // default
+          callback:function(t){$(t).lazylinepainter('paint');}
+        }
+      ).init();
+      //var s = t.extend({strokeWidth: 2,strokeColor: "#000",strokeOverColor: null,strokeCap: "round",strokeJoin: "round",
+      //ratioScale: 1,strokeOpacity: 1,arrowEnd: "none",onComplete: null,onStart: null,delay: null,
+      //overrideKey: null,drawSequential: !0,speedMultiplier: 1,reverse: !1,responsive: !1}, n), 
+      //o = s.overrideKey ? s.overrideKey : i.attr("id").replace("#", ""), 
+      //l = s.svgData[o].dimensions.width, u = s.svgData[o].dimensions.height;
+
+      $('#icons').lazylinepainter({
+        'svgData' : pathObj,
+        'strokeWidth':1,
+        'strokeColor':'#000',
+        'responsive': true,
+        'onComplete' : function(){
+          console.log('>> onComplete');
+        },
+        'onStart' : function(){
+          console.log('>> onStart');
+        }
+      });// lazylinepainter
+
+      // Paint your Lazy Line, that easy!
+      // start the animation
+      //var state = 'paint';
+      //$('#icons').lazylinepainter(state);
+      //(window).on('click', function(){
+      //state = (state === 'erase') ? 'paint':'erase' ;
+      //$('#icons').lazylinepainter(state);
+      //console.log('>> ' + state);
+      //});
+
+
+    }// init:function
   },
   // About us page, note the change from about-us to about_us.
   about_us: {
