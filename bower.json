@@ -1,5 +1,5 @@
 {
-  "name": "Homeaway",
+  "name": "HomeAway",
   "version": "1.0.0",
   "homepage": "http://artot.net",
   "authors": [
@@ -17,6 +17,8 @@
     "jquery": "1.11.1",
     "respond": "1.4.2",
     "vivus": "~0.2.1",
-    "bootstrap-sass": "~3.3.5"
+    "bootstrap-sass": "~3.3.5",
+    "lazy-line-painter": "~1.5.1",
+    "wow": "~1.1.2"
   }
 }
